@@ -1,0 +1,101 @@
+#!/usr/bin/env node --harmony
+
+const nodemailer = require("nodemailer");
+const wellknown = require('nodemailer-wellknown');
+const fs = require('fs');
+const inquirer = require('inquirer');
+const commander = require('commander');
+
+main(process.argv);
+
+// NOTE: functions only
+
+function email_html({sender, reciepient, subject, password, html, text}) {
+
+    const params = {
+        from : sender,
+        to: reciepient,
+        subject : subject
+    }
+
+    if (html !== undefined) {
+        params.html = fs.readFileSync(html, 'utf-8');        
+    }
+    if (text !== undefined) {
+        params.text = fs.readFileSync(text, 'utf-8');
+    }
+
+    const user = sender.replace('@', '%40');
+    const creditial = `smtps://${user}:${password}@smtp.gmail.com`;
+    const transporter = nodemailer.createTransport(creditial);
+    
+    transporter.sendMail(params, function(err, info) {
+        if (err) {
+            console.log(err);
+            return;
+        }
+        console.log(info);
+    });
+
+}
+
+function parse_argv(argv) {
+
+    const cmd_line = commander;
+    
+    cmd_line
+        .version('0.0.1')
+        .option('-s --sender <email>', 'sender email address')
+        .option('-r --reciepient <email>', 'reciepient email address')    
+        .option('-h --html <file>', 'html filename')
+        .option('-t --text <file>', 'text filename')
+        .option('-z --subject <title>', 'email subject')
+        .option('-p --password [password]', 'sender email password')
+    ;
+
+    cmd_line.parse(argv);
+    if (cmd_line.password !== undefined) {
+        return new Promise((res,rej) => {
+            res(cmd_line);
+        });
+    } else {
+        return new Promise((res, rej) => {
+            get_password().then(
+                function kept(password) {
+                    cmd_line.password = password;
+                    res(cmd_line);
+                },
+                function broken(err) {
+                    console.log(err);
+                });
+        });
+    }
+    
+    return cmd_line;
+
+    function get_password() {
+       
+        const prompt = inquirer.createPromptModule();
+        const question = { type : 'password', name : 'password', message : 'enter password :' };
+        return prompt(question).then(
+            function kept(answer) {
+                return answer.password;
+            },
+            function broken (err) {
+                console.log(err);
+            });
+    }
+}
+
+function main(args) {
+
+    parse_argv(args).then(
+        function kept (argv) {
+            email_html(argv);
+        },
+        function broken(err) {
+            console.log(err);
+        }
+    );
+}
+
